@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html ng-app="demoapp" style="height:100%">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.js"></script>
+    <script src="http://cdn.leafletjs.com/leaflet-0.7.1/leaflet.js"></script>
+    <script src="../../angular-leaflet-directive/dist/angular-leaflet-directive.js"></script>
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.1/leaflet.css">
+    <script type="text/javascript" src="http://d3js.org/d3.v3.min.js"></script>
+
+  </head>
+
+  <body ng-controller="BasicFirstController" style="height:100%">
+    <leaflet tiles="tiles" paths="paths" width="100%" height="400px"></leaflet>
+    <elevation></elevation>
+
+    <p>Change tiles clicking in the buttons below:</p>
+    <p>
+        <button ng-click="changeTiles('opencyclemap')" class="btn btn-default">OpenCycleMaps</button>
+        <button ng-click="changeTiles('openstreetmap')" class="btn btn-default">OpenStreetMaps</button>
+        <button ng-click="changeTiles('mapbox_outdoors')" class="btn btn-default">Mapbox Outdoors</button>
+        <button ng-click="changeTiles('mapbox_wheat')" class="btn btn-default">Mapbox Wheat Paste</button>
+    </p>
+    <p>Current TileLayer Url: <strong ng-bind="tiles.name"></strong></p>
+
+    <button ng-click="loadPaths()">Load Paths data!</button>
+    <button ng-click="shortenPath()">Shorten</button>
+
+    <style>
+      chart {
+        background: #eee;
+        color: #f00;
+        padding: 3px;
+      }
+
+      .chart div {
+        width: 0;
+        transition: all 1s ease-out;
+        -moz-transition: all 1s ease-out;
+        -webkit-transition: all 1s ease-out;
+      }
+
+      .chart div {
+        font: 10px sans-serif;
+        background-color: steelblue;
+        text-align: right;
+        padding: 3px;
+        margin: 5px;
+        color: white;
+        box-shadow: 2px 2px 2px #666;
+      }
+    </style>
+
+    <script>
+      var app = angular.module("demoapp", ['leaflet-directive']);
+
+      //camel cased directive name
+      //in your HTML, this will be named as bars-chart
+      app.directive('elevation', function ($parse) {
+        //explicitly creating a directive definition variable
+        //this may look verbose but is good for clarification purposes
+        //in real life you'd want to simply return the object {...}
+        return {
+          //We restrict its use to an element
+          restrict: 'E',
+          //this is important,
+          //we don't want to overwrite our directive declaration
+          //in the HTML mark-up
+          replace: false,
+          template: "<svg width='100%' height='200'></svg>",
+          link: function (scope, element, attrs) {
+
+          }
+        };
+      });
+
+      app.controller("BasicFirstController", [ "$scope", "$http", "leafletData", function($scope, $http, leafletData) {
+       $scope.loadPaths = function loadPaths() {
+          $http.get("test.json").success(function(data){
+            $scope.paths = {
+              example: {
+                type: "polyline",
+                latlngs: []
+              }
+            };
+
+            minLat = parseFloat(data[0].points[0].lat);
+            maxLat = minLat;
+            minLng = parseFloat(data[0].points[0].lon);
+            maxLng = minLng;
+
+            for( i=0 ; i<data.length ; i++ ) {
+              for( j=0 ; j<data[i].points.length ; j++ ) {
+                lat = parseFloat(data[i].points[j].lat);
+                lng = parseFloat(data[i].points[j].lon);
+
+                if( lat > maxLat )
+                  maxLat = lat;
+                if( lat < minLat )
+                  minLat = lat;
+                if( lng > maxLng )
+                  maxLng = lng;
+                if( lng < minLng )
+                  minLng = lng;
+
+                $scope.paths.example.latlngs.push( {
+                  lat: lat,
+                  lng: lng
+                });
+              }
+            }
+
+            leafletData.getMap().then(function(map) {
+              map.fitBounds([ [minLat, minLng], [maxLat, maxLng] ]);
+            });
+            
+          });
+        };
+
+        $scope.shortenPath = function shortenPath() {
+          $scope.paths.example.latlngs = $scope.paths.example.latlngs.slice(0,1000);
+        };
+
+        $scope.$watch('paths', function(newValue, oldValue) {
+
+            /*
+            //to our original directive markup bars-chart
+            //we add a div with out chart stling and bind each
+            //data entry to the chart
+            chart.append("div").attr("class", "chart")
+              .selectAll('div')
+              .data(scope.data).enter().append("div")
+              .transition().ease("elastic")
+              .style("width", function(d) { return d + "%"; })
+              .text(function(d) { return d + "%"; });
+            */
+
+          },
+          true
+        );
+
+        var tilesDict = {
+          openstreetmap: {
+            url: "http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            options: {
+              attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }
+          },
+          opencyclemap: {
+            url: "http://{s}.tile.opencyclemap.org/cycle/{z}/{x}/{y}.png",
+            options: {
+              attribution: 'All maps &copy; <a href="http://www.opencyclemap.org">OpenCycleMap</a>, map data &copy; <a href="http://www.openstreetmap.org">OpenStreetMap</a> (<a href="http://www.openstreetmap.org/copyright">ODbL</a>'
+            }
+          },
+          mapbox_outdoors: {
+            name: 'Mapbox Outdoors',
+            url: 'http://api.tiles.mapbox.com/v4/{mapid}/{z}/{x}/{y}.png?access_token={apikey}',
+            type: 'xyz',
+            options: {
+              apikey: 'pk.eyJ1IjoiYnVmYW51dm9scyIsImEiOiJLSURpX0pnIn0.2_9NrLz1U9bpwMQBhVk97Q',
+              mapid: 'bufanuvols.lia3no0m'
+            }
+          },
+          mapbox_wheat: {
+            name: 'Mapbox Wheat Paste',
+            url: 'http://api.tiles.mapbox.com/v4/{mapid}/{z}/{x}/{y}.png?access_token={apikey}',
+            type: 'xyz',
+            options: {
+              apikey: 'pk.eyJ1IjoiYnVmYW51dm9scyIsImEiOiJLSURpX0pnIn0.2_9NrLz1U9bpwMQBhVk97Q',
+                mapid: 'bufanuvols.lia35jfp'
+            }
+          }
+        };
+
+        angular.extend($scope, {
+          tiles: tilesDict.opencyclemap,
+          paths: []
+        });
+
+        $scope.changeTiles = function(tiles) {
+          $scope.tiles = tilesDict[tiles];
+        };
+
+      }]);
+    </script>
+
+  </body>
+</html>
