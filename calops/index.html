@@ -13,7 +13,7 @@
 
   <body ng-controller="BasicFirstController" style="height:100%">
     <leaflet tiles="tiles" paths="paths" width="100%" height="400px"></leaflet>
-    <elevation></elevation>
+    <elevation>Hello</elevation>
 
     <p>Change tiles clicking in the buttons below:</p>
     <p>
@@ -26,31 +26,6 @@
 
     <button ng-click="loadPaths()">Load Paths data!</button>
     <button ng-click="shortenPath()">Shorten</button>
-
-    <style>
-      chart {
-        background: #eee;
-        color: #f00;
-        padding: 3px;
-      }
-
-      .chart div {
-        width: 0;
-        transition: all 1s ease-out;
-        -moz-transition: all 1s ease-out;
-        -webkit-transition: all 1s ease-out;
-      }
-
-      .chart div {
-        font: 10px sans-serif;
-        background-color: steelblue;
-        text-align: right;
-        padding: 3px;
-        margin: 5px;
-        color: white;
-        box-shadow: 2px 2px 2px #666;
-      }
-    </style>
 
     <script>
       var app = angular.module("demoapp", ['leaflet-directive']);
@@ -69,14 +44,101 @@
           //in the HTML mark-up
           replace: false,
           template: "<svg width='100%' height='200'></svg>",
-          link: function (scope, element, attrs) {
+          link: function (scope, elem, attrs) {
+            console.log("Directive function");
+            
+            var dataToPlot=scope.alt_m;
+            console.log(dataToPlot);
+            var padding = 20;
+            var pathClass = "path";
+            var xScale, yScale, xAxisGen, yAxisGen, lineFun;
+                 
+            var rawSvg = elem.find("svg")[0];
+            var svg = d3.select(rawSvg); 
+           
+            function setChartParameters(){
+              xScale = d3.scale.linear()
+                         .domain([dataToPlot[0].time, dataToPlot[dataToPlot.length - 1].time])
+                         .range([padding + 5, rawSvg.clientWidth - padding]);
+             
+              yScale = d3.scale.linear()
+                         .domain([0, d3.max(dataToPlot, function (d) {
+                              return d.alt_m;
+                            })])
+                         .range([rawSvg.clientHeight - padding, 0]);
+             
+              xAxisGen = d3.svg.axis()
+                           .scale(xScale)
+                           .orient("bottom")
+                           .ticks(dataToPlot.length - 1);
+             
+              yAxisGen = d3.svg.axis()
+                           .scale(yScale)
+                           .orient("left")
+                           .ticks(5);
+             
+              lineFun = d3.svg.line()
+                          .x(function (d) {
+                            return xScale(d.hour);
+                          })
+                          .y(function (d) {
+                            return yScale(d.sales);
+                          })
+                          .interpolate("basis");
+            }
+                      
+            function drawLineChart() {
+             
+              setChartParameters();
+             
+              svg.append("svg:g")
+                 .attr("class", "x axis")
+                 .attr("transform", "translate(0,180)")
+                 .call(xAxisGen);
+             
+               svg.append("svg:g")
+                  .attr("class", "y axis")
+                  .attr("transform", "translate(20,0)")
+                  .call(yAxisGen);
+             
+               svg.append("svg:path")
+                  .attr({
+                    d: lineFun(dataToPlot),
+                    "stroke": "blue",
+                    "stroke-width": 2,
+                    "fill": "none",
+                    "class": pathClass
+               });
+            }
+             
+            //drawLineChart(); 
+            scope.$watch('alt_m', function(newValue, oldValue) {
+                console.log("New stuff has come to light!");
+                if( newValue.lengt) 
+                  redrawElevation();
+              },
+              true
+            );
 
+            function redrawElevation() {
+              setChartParameters();
+              svg.setlectAll("g.y.axis").call(yAxisGen);
+              svg.setlectAll("g.x.axis").call(xAxisGen);
+              svg.selectAll("." + pathClass)
+                .attr({
+                  d: lineFun(dataToPlot)
+                });
+            };
+
+            console.log("Directive done.");
           }
         };
       });
 
       app.controller("BasicFirstController", [ "$scope", "$http", "leafletData", function($scope, $http, leafletData) {
-       $scope.loadPaths = function loadPaths() {
+        console.log("controller function");
+        $scope.alt_m = [];
+        $scope.loadPaths = function loadPaths() {
           $http.get("test.json").success(function(data){
             $scope.paths = {
               example: {
@@ -84,12 +146,16 @@
                 latlngs: []
               }
             };
-
+            $scope.alt_m = [];
+            console.log($scope);
             minLat = parseFloat(data[0].points[0].lat);
             maxLat = minLat;
             minLng = parseFloat(data[0].points[0].lon);
             maxLng = minLng;
 
+            // 2015-05-03T16:53:08Z
+            timeFormat=d3.time.format.iso;
+  
             for( i=0 ; i<data.length ; i++ ) {
               for( j=0 ; j<data[i].points.length ; j++ ) {
                 lat = parseFloat(data[i].points[j].lat);
@@ -107,6 +173,12 @@
                 $scope.paths.example.latlngs.push( {
                   lat: lat,
                   lng: lng
+
+                });
+               
+                $scope.alt_m.push( {
+                  alt: data[i].points[j].alt,
+                  time: timeFormat.parse(data[i].points[j].time)
                 });
               }
             }
@@ -121,24 +193,6 @@
         $scope.shortenPath = function shortenPath() {
           $scope.paths.example.latlngs = $scope.paths.example.latlngs.slice(0,1000);
         };
-
-        $scope.$watch('paths', function(newValue, oldValue) {
-
-            /*
-            //to our original directive markup bars-chart
-            //we add a div with out chart stling and bind each
-            //data entry to the chart
-            chart.append("div").attr("class", "chart")
-              .selectAll('div')
-              .data(scope.data).enter().append("div")
-              .transition().ease("elastic")
-              .style("width", function(d) { return d + "%"; })
-              .text(function(d) { return d + "%"; });
-            */
-
-          },
-          true
-        );
 
         var tilesDict = {
           openstreetmap: {
